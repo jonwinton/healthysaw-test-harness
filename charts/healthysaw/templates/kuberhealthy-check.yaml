@@ -1,0 +1,52 @@
+{{- range $key, $test := .Values.tests }}
+---
+apiVersion: comcast.github.io/v1
+kind: KuberhealthyCheck
+metadata:
+  name: {{ $test.name }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "healthysaw.labels" $ | nindent 4 }}
+spec:
+  runInterval: {{ $test.runInterval | default "5m" }}
+  timeout: {{ $test.timeout | default "10m" }}
+  extraAnnotations:
+    {{- toYaml $.Values.globalExtraLabels | nindent 4 }}
+  {{- if $test.extraAnnotations }}
+    {{- toYaml $test.extraAnnotations | nindent 4 }}
+  {{- end }}
+  extraLabels:
+    {{- toYaml $.Values.globalExtraLabels | nindent 4 }}
+  {{- if $test.extraLabels }}
+    {{- toYaml $test.extraLabels | nindent 4 }}
+  {{- end }}
+  podSpec:
+    serviceAccountName: {{ include "healthysaw.serviceAccountName" $ }}
+    {{- with $.Values.checkAffinity }}
+    affinity:
+      {{- toYaml . | nindent 8 }}
+    {{- end }}
+    containers:
+      - name: {{ $test.name}}
+        image: "{{ $.Values.image.repository }}:{{ default $test.tag $.Values.image.tag | default $.Chart.AppVersion }}"
+        imagePullPolicy: {{ $.Values.image.pullPolicy }}
+        {{- if $test.args }}
+        args:
+        {{- toYaml $test.args | nindent 10 }}
+        {{- end }}
+        env:
+          - name: KH_CHECK_NAME
+            valueFrom:
+              fieldRef:
+                apiVersion: v1
+                fieldPath: metadata.labels['kuberhealthy-check-name']
+          {{- if $test.env }}
+          {{- with $test.env }}
+          {{- toYaml $test.env | nindent 10 }}
+          {{- end }}
+          {{- end }}
+        resources:
+        {{- toYaml $test.resources | nindent 10 }}
+    restartPolicy: Always
+    terminationGracePeriodSeconds: 5
+{{- end }}
